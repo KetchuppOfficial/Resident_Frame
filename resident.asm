@@ -3,10 +3,6 @@
 .186
 org 100h
 
-LeftT           equ 0C9h
-LeftB           equ 0C8h
-RightT          equ 0BBh
-RightB          equ 0BCh
 VIDEOSEG        equ 0B800h
 COLOUR          equ 2Bh
 
@@ -97,7 +93,7 @@ minus       db '-'
             ret
 
 itoa        endp
-;--------------------------------------------------------------------
+
 ;--------------------------------------------------------------------
 ;strlen:
 ;    Input: stack
@@ -105,7 +101,6 @@ itoa        endp
 ;    Registers that change values:
 ;       DI - offset of the string
 ;       AL - contains end of line symbol
-;--------------------------------------------------------------------
 ;--------------------------------------------------------------------
 strlen      proc
 
@@ -200,12 +195,6 @@ draw_middle_line    proc
                     pop bx
 
                     mov si, ax
-
-                push dx
-                    mov dx, si
-                    mov ax, 0900h
-                    int 21h
-                pop dx
                     
                     push si
                     call strlen
@@ -292,7 +281,7 @@ main:
         mov ax, VIDEOSEG
         mov es, ax
         mov ah, COLOUR
- 
+     
         mov di, offset reg_vals
         mov [di], ax
         add di, 2
