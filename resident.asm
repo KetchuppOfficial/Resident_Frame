@@ -10,8 +10,41 @@ Start: jmp main
 locals @@
 
 ;--------------------------------------------------------------------
+New_int09h  proc
+
+Open        db 17h          ; I
+Close       db 24h          ; J
+
+            push ax
+
+@@waiting:
+            in al, 60h
+            cmp al, Open
+            jne @@waiting
+
+            call draw_frame
+
+            in al, 61h
+            mov ah, al
+
+            or al, 80h
+            out 61h, al
+
+            mov al, ah
+            out 61h, al
+
+            mov al, 20h
+            out 20h, al   
+
+            pop ax
+            jmp cs:Old_int09h
+
+New_int09h  endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
 ;itoa:
-;   Input: stack
+;   Input: stackг8г
 ;   Output: AX
 ;   Registers that change values:
 ;       BX - offset of the string
@@ -234,7 +267,22 @@ draw_middle_line   endp
 ;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
-draw_frame     proc
+draw_frame      proc
+                
+                mov reg_vals[0], ax
+                mov reg_vals[2], bx
+                mov reg_vals[4], cx
+                mov reg_vals[6], dx
+                mov reg_vals[8], si
+                mov reg_vals[10], di
+                mov reg_vals[12], bp
+                mov reg_vals[14], sp
+
+                mov ax, VIDEOSEG
+                mov es, ax
+                mov ah, COLOUR
+
+                xor di, di
 
                 mov si, offset frame
                 call draw_tb_lines
@@ -267,8 +315,8 @@ draw_frame     proc
                 call New_Line
 
                 add cx, 0004h
-                cmp cx, 000Ch
-                jbe @@middle_lines
+                cmp cx, 0020h
+                jb @@middle_lines
 
                 mov si, offset frame + 4
                 call draw_tb_lines
@@ -278,22 +326,34 @@ draw_frame     endp
 ;--------------------------------------------------------------------
 
 main:
-        mov ax, VIDEOSEG
-        mov es, ax
-        mov ah, COLOUR
-     
-        mov di, offset reg_vals
-        mov [di], ax
-        add di, 2
-        mov [di], bx
-        add di, 2
-        mov [di], cx
-        add di, 2
-        mov [di], dx
+    cli
 
-        xor di, di
+        mov ax, 3509h                   ; finds out segment and offset of the old 09h handler
+        int 21h                         ; now <es> contains segment, <bx> contains offset of Old_int09h_handler
 
-        call draw_frame
+        mov word ptr Old_int09h, bx     ; save old 09h handler
+        mov word ptr Old_int09h + 2, es ;
+
+        mov ax, 2509h                   ;
+        mov dx, offset New_int09h       ; changing 09h handler into my own
+        int 21h                         ;
+
+    sti
+
+if 0
+        lea dx, main
+        int 27h
+endif
+
+        call New_int09h
+
+        Old_int09h dd ?
+        
+        mov ax, 2509h
+        mov dx, word ptr Old_int09h + 2
+        mov ds, dx
+        mov dx, word ptr cs:Old_int09h;
+        int 21h
 
         mov ax, 4C00h
         int 21h
@@ -301,11 +361,11 @@ main:
 frame   db  0C9h, 0CDh, 0BBh, 0BAh, 0C8h, 0CDh, 0BCh
 ;           LT    T     RT    Vert  LB    B     RB
 
-regs            db "ax: bx: cx: dx: "
-reg_vals        dw 4 dup (0)
+regs            db "ax: bx: cx: dx: si: di: bp: sp: "
+reg_vals        dw 8 dup (0)
 num_string      db 16 dup (0)
 numbers         db "0123456789ABCDEF"
 
-string          db 16 dup (0)
+prog_end:
 
 end     Start
