@@ -12,16 +12,19 @@ locals @@
 ;--------------------------------------------------------------------
 New_int09h  proc
 
-Open        db 17h          ; I
-Close       db 24h          ; J
+Open    equ 17h ; I
+Close   equ 24h ; J
 
-            push ax
+            pusha
+            pushf
+            push es
 
-@@waiting:
             in al, 60h
             cmp al, Open
-            jne @@waiting
+            jne @@not_pressed
 
+            push cs
+            pop ds
             call draw_frame
 
             in al, 61h
@@ -34,10 +37,22 @@ Close       db 24h          ; J
             out 61h, al
 
             mov al, 20h
-            out 20h, al   
+            out 20h, al
 
-            pop ax
-            jmp cs:Old_int09h
+            pop es
+            popf
+            popa
+            iret
+
+@@not_pressed:
+            mov al, 00h
+            mov Frame_Flag, al
+            pop es
+            popf
+            popa
+            
+            db 0EAh             ; jmp far to old handler
+            Old_int09h dd 0
 
 New_int09h  endp
 ;--------------------------------------------------------------------
@@ -57,8 +72,6 @@ itoa        proc
 
 num         equ [bp + 6]
 str         equ [bp + 4]
-EOL         db '$'
-minus       db '-'
 
             push bp
             mov bp, sp
@@ -68,10 +81,10 @@ minus       db '-'
             mov di, 0010h
 
             cmp ax, 0000h
-            je  @@zero
+            je @@zero
 
             cmp ax, 0000h
-            jb  @@negative
+            jb @@negative
 
             jmp @@positive
 
@@ -124,6 +137,12 @@ minus       db '-'
             mov ax, str
             pop bp
             ret
+
+EOL         db '$'
+minus       db '-'
+
+num_string      db 16 dup (0)
+numbers         db "0123456789ABCDEF"
 
 itoa        endp
 
@@ -277,15 +296,16 @@ draw_frame      proc
                 mov reg_vals[10], di
                 mov reg_vals[12], bp
                 mov reg_vals[14], sp
-
+            
                 mov ax, VIDEOSEG
                 mov es, ax
                 mov ah, COLOUR
-
+            
                 xor di, di
 
                 mov si, offset frame
                 call draw_tb_lines
+            
 
                 mov si, offset frame + 3
 
@@ -302,7 +322,11 @@ draw_frame      proc
                 push cx
 
                 push bx
+
+            
                 call draw_middle_line
+            
+
                 pop bx
                 add bx, 2
 
@@ -311,21 +335,30 @@ draw_frame      proc
                 pop si
                 mov al, [si]
                 stosw
-
+            
                 call New_Line
 
                 add cx, 0004h
-                cmp cx, 0020h
-                jb @@middle_lines
+                cmp cx, 001Eh
+                jbe @@middle_lines
 
                 mov si, offset frame + 4
                 call draw_tb_lines
+            
                 ret
+
+frame   db  0C9h, 0CDh, 0BBh, 0BAh, 0C8h, 0CDh, 0BCh
+;           LT    T     RT    Vert  LB    B     RB
+
+regs            db "ax: bx: cx: dx: si: di: bp: sp: "
+
+reg_vals        dw 8 dup (0)
 
 draw_frame     endp
 ;--------------------------------------------------------------------
 
 main:
+
     cli
 
         mov ax, 3509h                   ; finds out segment and offset of the old 09h handler
@@ -335,36 +368,21 @@ main:
         mov word ptr Old_int09h + 2, es ;
 
         mov ax, 2509h                   ;
-        mov dx, offset New_int09h       ; changing 09h handler into my own
+        push cs                         ;
+        pop ds                          ; changing 09h handler into my own
+        mov dx, offset New_int09h       ; 
         int 21h                         ;
 
     sti
 
-if 0
-        lea dx, main
-        int 27h
-endif
-
-        call New_int09h
-
-        Old_int09h dd ?
-        
-        mov ax, 2509h
-        mov dx, word ptr Old_int09h + 2
-        mov ds, dx
-        mov dx, word ptr cs:Old_int09h;
+        mov ax, 3100h
+        mov dx, offset prog_end
+        shr dx, 4
+        inc dx
         int 21h
 
         mov ax, 4C00h
         int 21h
-
-frame   db  0C9h, 0CDh, 0BBh, 0BAh, 0C8h, 0CDh, 0BCh
-;           LT    T     RT    Vert  LB    B     RB
-
-regs            db "ax: bx: cx: dx: si: di: bp: sp: "
-reg_vals        dw 8 dup (0)
-num_string      db 16 dup (0)
-numbers         db "0123456789ABCDEF"
 
 prog_end:
 
