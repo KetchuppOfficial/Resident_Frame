@@ -146,12 +146,12 @@ New_Line	proc
             push dx
             
             xor dx, dx          ;
-			mov ax, di          ;
-			mov cx, 0A0h        ;   
-			div cx              ; di = (di/160)*(160 + 1)
-			inc ax              ;
-			mul cx              ;
-			mov di, ax          ;
+            mov ax, di          ;
+            mov cx, 0A0h        ;
+            div cx              ; di = (di/160)*(160 + 1)
+            inc ax              ;
+            mul cx              ;
+            mov di, ax          ;
 
             pop dx
             pop cx
@@ -179,8 +179,8 @@ Draw_TB_Lines   proc
                 mov cx, 0009h
                 lodsb
 @@next_symb:
-			    stosw
-			    loop @@next_symb
+                stosw
+                loop @@next_symb
 
                 lodsb
                 stosw
