@@ -9,159 +9,116 @@ COLOUR          equ 2Bh
 Start: jmp main
 locals @@
 
-;--------------------------------------------------------------------
-New_int09h  proc
-
-Open    equ 17h ; I
-Close   equ 24h ; J
-
-            pusha
-            pushf
-            push es
-
-            in al, 60h
-            cmp al, Open
-            jne @@not_pressed
-
-            push cs
-            pop ds
-            call draw_frame
-
-            in al, 61h
-            mov ah, al
-
-            or al, 80h
-            out 61h, al
-
-            mov al, ah
-            out 61h, al
-
-            mov al, 20h
-            out 20h, al
-
-            pop es
-            popf
-            popa
-            iret
-
-@@not_pressed:
-            mov al, 00h
-            mov Frame_Flag, al
-            pop es
-            popf
-            popa
-            
-            db 0EAh             ; jmp far to old handler
-            Old_int09h dd 0
-
-New_int09h  endp
-;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
 ;itoa:
-;   Input: stackг8г
+;   Input: stack (2 words)
 ;   Output: AX
 ;   Registers that change values:
+;       AX - number
 ;       BX - offset of the string
 ;       CX - is used to put values from one part of RAM to another
 ;       DX - constains the remainder of division after using mul ()
-;           than contains offset of the string
-;       DI - constains the remainder of division
+;       DI - contains radix, than offset of the string
+;       SI - constains the remainder of division number by radix
 ;--------------------------------------------------------------------
 itoa        proc
 
 num         equ [bp + 6]
 str         equ [bp + 4]
 
-            push bp
-            mov bp, sp
+            push bp                 ; prolog
+            mov bp, sp              ;
 
-            mov ax, num
-            mov bx, str
-            mov di, 0010h
+            mov ax, num             ;
+            mov bx, str             ; void itoa (int x, char *str, 16)
+            mov di, 0010h           ;
 
-            cmp ax, 0000h
-            je @@zero
+            cmp ax, 0000h           ; if (x == 0)
+            je @@zero               ;
 
-            cmp ax, 0000h
-            jb @@negative
+            cmp ax, 0000h           ; if (x < 0)
+            jb @@negative           ;
 
-            jmp @@positive
+            jmp @@positive          ; else
 
-@@zero:     mov ch, numbers[0]
-            mov [bx], ch
-            inc bx
+@@zero:     mov ch, numbers[0]      ; *str = '0'
+            mov ds:[bx], ch         ;
+            inc bx                  ; str++
 
-            mov ch, EOL
-            mov [bx], ch
-            jmp @@return
+            mov ch, EOL             ; *str = '\0'
+            mov ds:[bx], ch         ;
+
+            jmp @@return            ; return
 
 @@negative: 
-            mov ch, minus
-            mov [bx], ch
-            inc bx
+            mov ch, minus           ; *str = '-'
+            mov ds:[bx], ch         ;
+            inc bx                  ; str++
 
-            neg ax
-@@positive: 
-            xor dx, dx
-            div di
-            mov si, dx
-            mov ch, numbers[si]
-            mov [bx], ch
-            xor si, si
-            inc bx
-            cmp ax, 0000h
-            jne @@positive
+            neg ax                  ; x = -x
+
+@@positive:                         
+            xor dx, dx              ; do
+            div di                  ; x /= 16 и x % 16
+            mov si, dx              ; *ptr = "0123456789ABCDEF"[x%16]
+            mov ch, numbers[si]     ; (char *ptr = str)
+            mov ds:[bx], ch         ;
+            inc bx                  ; ptr++
+
+            cmp ax, 0000h           ; while (x != 0)
+            jne @@positive          ;
             
-            mov ch, EOL
-            mov [bx], ch
+            mov ch, EOL             ; *ptr = '\0'
+            mov ds:[bx], ch         ;
 
-            cmp bx, str
-            jbe @@return
 
-            mov di, str
-@@change:
-            dec bx
-            mov ch, [bx]
+            mov di, str               
+@@change:                           ; do
+            dec bx                  ; --ptr
+            mov ch, ds:[bx]         ; char c = *ptr
 
-            mov ah, [di]
-            mov [bx], ah
+            mov ah, ds:[di]         ; *ptr = *str
+            mov ds:[bx], ah         ;
 
-            mov [di], ch
-            inc di
+            mov ds:[di], ch         ; *str = c
+            inc di                  ; str++
 
-            cmp bx, di
-            ja @@change
+            cmp bx, di              ; while (ptr > str)
+            ja @@change             ; 
         
 @@return:
-            mov ax, str
-            pop bp
-            ret
+            mov ax, str             ; return str
+
+            pop bp                  ; epilog
+            ret                     ;
 
 EOL         db '$'
 minus       db '-'
 
-num_string      db 16 dup (0)
-numbers         db "0123456789ABCDEF"
+numbers     db "0123456789ABCDEF"
 
 itoa        endp
+;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
 ;strlen:
-;    Input: stack
+;    Input: stack (1 word)
 ;    Output: AX
 ;    Registers that change values:
-;       DI - offset of the string
 ;       AL - contains end of line symbol
+;       BX - offset of the beginning of the string
+;       DI - offset of the current char
 ;--------------------------------------------------------------------
 strlen      proc
 
             push bp
             mov bp, sp
 
-            mov al, '$'
+            mov al, EOL
             mov di, [bp + 4]
             mov bx, di
+
             dec di
 @@while:
             inc di
@@ -178,20 +135,23 @@ strlen      endp
 ;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
+;New_Line:
+;   Registers that change values:
+;       DI - offset in the video segment
+;--------------------------------------------------------------------
 New_Line	proc
 
             push ax
             push cx
             push dx
             
-            xor dx, dx
-			mov ax, di
-			mov cx, 0A0h
-			div cx
-			inc ax
-			mul cx
-			mov di, ax
-			mov ah, COLOUR
+            xor dx, dx          ;
+			mov ax, di          ;
+			mov cx, 0A0h        ;   
+			div cx              ; di = (di/160)*(160 + 1)
+			inc ax              ;
+			mul cx              ;
+			mov di, ax          ;
 
             pop dx
             pop cx
@@ -203,7 +163,15 @@ New_Line	endp
 ;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
-draw_tb_lines   proc
+;Draw_TB_Lines:
+;   Registers that change values:
+;       AL - character (inside <lodsb>)
+;       AX - character and its descriptor (inside <stosw>)
+;       CX - counter
+;       DI - offset in the video segment (inside <stosw>)
+;       SI - offset in buffer (inside <lodsb>)
+;--------------------------------------------------------------------
+Draw_TB_Lines   proc
 
                 lodsb
                 stosw
@@ -221,168 +189,279 @@ draw_tb_lines   proc
 
                 ret
 
-draw_tb_lines   endp
+Draw_TB_Lines   endp
 ;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
-draw_middle_line    proc
+;Draw_Registers:
+;   Registers that change values:
+;       AL - charachers
+;       AH - background colour
+;       AX - video segment (at first), register's value (then),
+;            length of the string (after that)
+;       BX - offset of the array with registers' values
+;       CX - counter
+;       DI - offset in the video segment
+;       ES - video segment
+;       SI - offset of the string
+;--------------------------------------------------------------------
+Draw_Registers      proc
 
-                    push bp
-                    mov bp, sp
-
-                    mov cx, 0004h
-            @@before_value:  
-                    lodsb
-                    stosw
-                    loop @@before_value
-
-                    push di
+                    mov reg_vals[0], ax             ;
+                    mov reg_vals[2], bx             ;
+                    mov reg_vals[4], cx             ;
+                    mov reg_vals[6], dx             ; filling array with
+                    mov reg_vals[8], si             ; registers' values
+                    mov reg_vals[10], di            ;
+                    mov reg_vals[12], bp            ;
+                    mov reg_vals[14], sp            ;
+            
+                    mov ax, VIDEOSEG                ;
+                    mov es, ax                      ; set video mode
+                    mov ah, COLOUR                  ;
                     
-                    mov bx, [bp + 4]
+                    mov di, 170                     ; top left corner of regs area
+                    mov bx, offset reg_vals
+                    mov cx, 8                       ; counter for 8 regs
+    @@print_regs:
+            push cx
+
+                push di
+                push bx
+                    
                     mov ax, [bx]
-                    push ax
-                    push offset num_string
-                    call itoa
-                    pop bx
-                    pop bx
+
+                    push ax                         ;
+                    push offset num_string          ;
+                    call itoa                       ; transform number in a string
+                    pop cx                          ;
+                    pop cx                          ;
 
                     mov si, ax
-                    
-                    push si
-                    call strlen
-                    pop bx
 
-                    pop di
-
-                    cmp ax, 0004h
-                    je @@4_digits
-                    
-                    mov cx, 0004h
-                    sub cx, ax
-                    mov al, '0'
-                    mov ah, COLOUR
-                @@fill_spaces:
-                    stosw
-                    loop @@fill_spaces
-
-                @@4_digits:
-                    mov ah, COLOUR
-            @@value:    
-                    lodsb
-                    cmp al, EOL
-                    je @@hex_ind
-                    stosw
-                    jmp @@value
-
-            @@hex_ind:
-                    mov al, 'h'
-                    mov es:[di], ax
-                    add di, 2
-
-                    pop bp
-                    ret
-
-draw_middle_line   endp
-;--------------------------------------------------------------------
-
-;--------------------------------------------------------------------
-draw_frame      proc
-                
-                mov reg_vals[0], ax
-                mov reg_vals[2], bx
-                mov reg_vals[4], cx
-                mov reg_vals[6], dx
-                mov reg_vals[8], si
-                mov reg_vals[10], di
-                mov reg_vals[12], bp
-                mov reg_vals[14], sp
-            
-                mov ax, VIDEOSEG
-                mov es, ax
-                mov ah, COLOUR
-            
-                xor di, di
-
-                mov si, offset frame
-                call draw_tb_lines
-            
-
-                mov si, offset frame + 3
-
-                xor cx, cx
-                mov bx, offset reg_vals
-            @@middle_lines:
-                mov al, [si]
-                stosw
-                push si
-
-                mov si, offset regs
-                add si, cx
-
-                push cx
-
-                push bx
-
-            
-                call draw_middle_line
-            
+                    push si                         ;
+                    call strlen                     ; measure length of the string
+                    pop cx                          ;
 
                 pop bx
-                add bx, 2
+                pop di
 
-                pop cx
+                    cmp ax, 4                       ; if there are 4 digits
+                    je @@digits                     ; draw just them
+                    
+                    mov cx, 0004h                   ; else
+                    sub cx, ax                      ; calculate how many zeors
+                    mov al, '0'                     ; have to be drawn
+                    mov ah, COLOUR      
+                @@fill_spaces:                      ;
+                    stosw                           ; draw zeors
+                    loop @@fill_spaces              ;
 
-                pop si
-                mov al, [si]
-                stosw
+                @@digits:
+                    mov ah, COLOUR
+                @@value:                            ;
+                    lodsb                           ;
+                    cmp al, EOL                     ; draw other digits    
+                    je @@end                        ;
+                    stosw                           ;
+                    jmp @@value                     ;
+                @@end:
+
+                    call New_Line                   ;
+                    add di, 10                      ; jump to the next line
+                    add bx, 2                       ;
+
+            pop cx
+            loop @@print_regs
+
+                    ret
+
+reg_vals    dw 8 dup (0)
+num_string  db 17 dup (0)                 
+
+Draw_Registers      endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
+;Draw_Frame:
+;   Registers that change values:
+;       AL - charachers
+;       AH - background colour
+;       AX - video segment (at first)
+;       CX - counter
+;       DI - offset in the video segment
+;       ES - video segment
+;       SI - offset in registers' names array
+;--------------------------------------------------------------------
+Draw_Frame      proc
             
-                call New_Line
+                mov ax, VIDEOSEG                ;
+                mov es, ax                      ; set video mode
+                mov ah, COLOUR                  ;
+            
+                xor di, di                      ; set offset in VIDEOSEG as 0
 
-                add cx, 0004h
-                cmp cx, 001Eh
-                jbe @@middle_lines
+                mov si, offset frame            ; draw top line
+                call Draw_TB_Lines              ; of the frame
+            
+                mov si, offset frame + 3        ; si = vertical part of the frame 
 
-                mov si, offset frame + 4
-                call draw_tb_lines
+                xor cx, cx                      ; set counter to 0
+            @@middle_lines:
+                mov al, [si]                    ; draw left vertical part
+                stosw                           ;
+
+        push si
+
+                mov si, offset regs_names       ; si = current regiser's name
+                add si, cx                      ;
+
+            push cx
+
+                mov cx, 0004h                   ; 4 chars: for example, "ax: "
+            @@before_value:                     ;
+                lodsb                           ; prints sth like "ax: "
+                stosw                           ;
+                loop @@before_value             ;
+
+            pop cx
+
+                add di, 8                       ;
+                mov al, 'h'                     ; draws 'h' letter to show that numbers
+                stosw                           ; are written in hexadecimal from
+
+        pop si
+
+                mov al, [si]                    ; draw right vertical part
+                stosw                           ;
+            
+                call New_Line                   ; jmp to the new line
+
+                add cx, 4
+                cmp cx, 4*8
+                jb @@middle_lines
+
+                mov si, offset frame + 4        ; draw bottom line
+                call Draw_TB_Lines              ; of the frame
             
                 ret
 
 frame   db  0C9h, 0CDh, 0BBh, 0BAh, 0C8h, 0CDh, 0BCh
 ;           LT    T     RT    Vert  LB    B     RB
 
-regs            db "ax: bx: cx: dx: si: di: bp: sp: "
+regs_names      db "ax: bx: cx: dx: si: di: bp: sp: "
 
-reg_vals        dw 8 dup (0)
-
-draw_frame     endp
+Draw_Frame      endp
 ;--------------------------------------------------------------------
 
-main:
+;--------------------------------------------------------------------
+main    proc
+    
+        cli                                     ; extern interrupts are no longer allowed
+        
+        ; CHANGING INT 08H
 
-    cli
+            mov ax, 3508h                       ; finds out segment and offset
+            int 21h                             ; of the old 08h handler
 
-        mov ax, 3509h                   ; finds out segment and offset of the old 09h handler
-        int 21h                         ; now <es> contains segment, <bx> contains offset of Old_int09h_handler
+            mov word ptr Old_int08h, bx         ; save old 08h handler
+            mov word ptr Old_int08h + 2, es     ;
 
-        mov word ptr Old_int09h, bx     ; save old 09h handler
-        mov word ptr Old_int09h + 2, es ;
+            mov ax, 2508h                       ;
+            mov dx, offset New_int08h           ; changing 08h handler into my own
+            int 21h                             ;
 
-        mov ax, 2509h                   ;
-        push cs                         ;
-        pop ds                          ; changing 09h handler into my own
-        mov dx, offset New_int09h       ; 
-        int 21h                         ;
+        ; CHANGING INT 09H
+        
+            mov ax, 3509h                       ; finds out segment and offset
+            int 21h                             ; of the old 09h handler
 
-    sti
+            mov word ptr Old_int09h, bx         ; save old 09h handler
+            mov word ptr Old_int09h + 2, es     ;
 
-        mov ax, 3100h
-        mov dx, offset prog_end
-        shr dx, 4
-        inc dx
-        int 21h
+            mov ax, 2509h                       ;
+            mov dx, offset New_int09h           ; changing 09h handler into my own
+            int 21h                             ;
 
-        mov ax, 4C00h
-        int 21h
+        sti                                     ; extern interrupts are allowed again
+
+            mov ax, 3100h                       ;
+            mov dx, offset prog_end             ;
+            shr dx, 4                           ; makes program resident
+            inc dx                              ;
+            int 21h                             ;
+
+main        endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
+New_int08h  proc
+            
+            pusha                       ;
+            push es                     ; save used registers
+            push ds                     ;
+
+            push cs                     ; 
+            pop ds                      ;
+        
+            cmp cs:[Frame_Flag], 01h    ; check <Frame_Flag> value
+            jne @@no_frame              ; 
+
+            call Draw_Registers
+            call Draw_Frame
+@@no_frame:
+            mov al, 20h                 ; correct way to return from
+            out 20h, al                 ; int 08h handler
+
+            pop ds                      ;
+            pop es                      ; restore registers' value
+            popa                        ;
+
+            db 0EAh                     ; <jmp far ptr> to old
+            Old_int08h dd 0             ; int 08h handler
+
+New_int08h  endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
+New_int09h  proc
+
+Open        equ 17h                         ; 'I'
+Close       equ 24h                         ; 'J'
+
+            push ax                         ; save used registers
+
+            in al, 60h                      ;
+            cmp al, Open                    ; read and check char from the keyboard
+            jne @@not_pressed               ;
+            
+            mov cs:[Frame_Flag], 01h        ; if 'I' button is pressed, Frame_Flag = 1
+
+            in al, 61h                      ;
+            mov ah, al                      ;
+                                            ;
+            or al, 80h                      ;
+            out 61h, al                     ; correct way to return from
+                                            ; 
+            mov al, ah                      ; handler of 09h interrupt
+            out 61h, al                     ;
+                                            ;
+            mov al, 20h                     ;
+            out 20h, al                     ;
+
+            pop ax                          ; restore registers' values
+            iret                            ;
+
+@@not_pressed:
+            pop ax                          ; if 'I' button is not pressed,
+                                            ;
+            db 0EAh                         ; <jmp far ptr> to old handler
+            Old_int09h dd 0                 ;
+
+Frame_Flag  db 0
+
+New_int09h  endp
+;--------------------------------------------------------------------
 
 prog_end:
 
