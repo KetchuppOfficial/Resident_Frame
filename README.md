@@ -14,7 +14,7 @@ As far as double buffering is used pressing **J** leads to appearing correct pie
 
 # Example of the frame
 
-(Frame)[]
+(Frame)[https://github.com/KetchuppOfficial/Resident_Frame/blob/main/Frame_Example.jpg]
 
 # Unloading after using
 
