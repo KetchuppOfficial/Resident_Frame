@@ -9,7 +9,6 @@ COLOUR          equ 2Bh
 Start: jmp main
 locals @@
 
-
 ;--------------------------------------------------------------------
 ;itoa:
 ;   Input: stack (2 words)
@@ -215,7 +214,7 @@ Draw_Registers      proc
                     mov reg_vals[10], di            ;
                     mov reg_vals[12], bp            ;
                     mov reg_vals[14], sp            ;
-            
+   
                     mov ax, VIDEOSEG                ;
                     mov es, ax                      ; set video mode
                     mov ah, COLOUR                  ;
@@ -355,6 +354,154 @@ Draw_Frame      endp
 ;--------------------------------------------------------------------
 
 ;--------------------------------------------------------------------
+;Save_Buff:
+;   Registers that change values:
+;       AX - video segment (at first)
+;       CX - counter
+;       DI - offset in the video segment
+;       ES - video segment (then)
+;       SI - offset in the screen buffer
+;--------------------------------------------------------------------
+Save_Buff   proc
+
+BUFF_SIZE   equ 110
+
+N_Lines     equ 10
+N_Columns   equ 11
+
+            push bp
+            mov bp, sp
+            
+            mov ax, VIDEOSEG
+            mov es, ax
+            xor di, di
+
+            mov si, [bp + 4]
+
+            mov cx, N_Lines
+        @@lines:
+                push cx
+
+                mov cx, N_Columns
+            @@in_line:
+                mov ax, es:[di]
+                mov [si], ax
+                add si, 2
+                add di, 2
+                loop @@in_line
+                
+                pop cx
+
+                call New_Line
+
+            loop @@lines
+
+            pop bp
+
+            ret
+
+Old_Buff    dw  BUFF_SIZE dup (0)
+New_Buff    dw  BUFF_SIZE dup (0)
+
+Save_Buff    endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
+;Restore_Screen:
+;   Registers that change values:
+;       AX - offset of the video segment (at first)
+;       CX - counter
+;       DI - offset in the video segment
+;       ES - video segment
+;       SI - offset in the New_Buff
+;--------------------------------------------------------------------
+Restore_Screen  proc
+
+                mov ax, VIDEOSEG
+                mov es, ax
+                xor di, di
+
+                mov si, offset New_Buff
+
+                mov cx, N_Lines
+            @@lines:
+                    push cx
+
+                    mov cx, N_Columns
+                @@in_line:
+                    lodsw
+                    stosw
+                    loop @@in_line
+
+                    pop cx
+
+                    call New_Line
+
+                loop @@lines
+
+                ret
+
+Restore_Screen  endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
+;Buff_Check:
+;   Registers that change values:
+;       AX - offset of the video segment (at first),
+;           is used to compare values from RAM
+;       CX - counter
+;       DI - offset in the video segment
+;       ES - video segment
+;       SI - offset in the New_Buff
+;--------------------------------------------------------------------
+Buff_Check  proc
+
+            pusha
+
+            mov ax, VIDEOSEG
+            mov es, ax
+            xor di, di
+            
+            mov si, offset Old_Buff
+
+            mov cx, N_Lines
+
+        @@lines:
+                push cx
+            
+                mov cx, N_Columns
+
+            @@in_line:
+                mov ax, word ptr [si]
+                cmp word ptr es:[di], ax
+                jne @@restore_buff
+
+                add di, 2
+                add si, 2
+                loop @@in_line
+
+                pop cx
+
+                call New_Line
+
+            loop @@lines
+            jmp @@return
+
+        @@restore_buff:
+            pop cx
+
+            push offset New_Buff
+            call Save_Buff
+            pop cx
+
+        @@return:
+            popa
+            ret
+
+Buff_Check  endp
+;--------------------------------------------------------------------
+
+;--------------------------------------------------------------------
 main    proc
     
         cli                                     ; extern interrupts are no longer allowed
@@ -404,11 +551,25 @@ New_int08h  proc
             push cs                     ; 
             pop ds                      ;
         
-            cmp cs:[Frame_Flag], 01h    ; check <Frame_Flag> value
-            jne @@no_frame              ; 
+            cmp cs:[Frame_Flag], 00h    ; check <Frame_Flag> value
+            je @@no_frame               ;
+            cmp cs:[Frame_Flag], 02h    ;
+            je @@remove                 ;
 
+            call Buff_Check
             call Draw_Registers
             call Draw_Frame
+
+            push offset Old_Buff
+            call Save_Buff
+            pop ax
+
+            jmp @@no_frame
+
+@@remove:   
+            call Restore_Screen
+            mov cs:[Frame_Flag], 00h
+
 @@no_frame:
             mov al, 20h                 ; correct way to return from
             out 20h, al                 ; int 08h handler
@@ -429,14 +590,19 @@ New_int09h  proc
 Open        equ 17h                         ; 'I'
 Close       equ 24h                         ; 'J'
 
-            push ax                         ; save used registers
+            pusha
+            push es
 
             in al, 60h                      ;
             cmp al, Open                    ; read and check char from the keyboard
             jne @@not_pressed               ;
             
             mov cs:[Frame_Flag], 01h        ; if 'I' button is pressed, Frame_Flag = 1
+            push offset New_Buff
+            call Save_Buff
+            pop ax
 
+@@correct_exit:
             in al, 61h                      ;
             mov ah, al                      ;
                                             ;
@@ -449,11 +615,22 @@ Close       equ 24h                         ; 'J'
             mov al, 20h                     ;
             out 20h, al                     ;
 
-            pop ax                          ; restore registers' values
+            pop es
+            popa                            ; restore registers' values
             iret                            ;
 
 @@not_pressed:
-            pop ax                          ; if 'I' button is not pressed,
+            cmp al, Close
+            jne @@exit
+            cmp cs:[Frame_Flag], 00h        ; exit if "J" is pressed   
+            je @@correct_exit               ; and there is no frame
+
+            mov cs:[Frame_Flag], 02h
+            jmp @@correct_exit
+
+@@exit:
+            pop es                          ;
+            popa                            ; if 'I' button is not pressed,
                                             ;
             db 0EAh                         ; <jmp far ptr> to old handler
             Old_int09h dd 0                 ;
