@@ -6,7 +6,7 @@ This program is written in assembler language for MS-DOS (assembler: TASM). It's
 
 ## Usage
 
-After running this program you can do whatever you want in DOS as the program will work on the background. Press **I** to make the frame appear, **J** - to disappear.
+After running this program you can do whatever you want in DOS as the program will work on the background. Press *I* to make the frame appear, *J* - to disappear.
 
 ## Unloading after using
 
@@ -14,7 +14,11 @@ Don't forget to unload this program after using. It can be done by pressing *Alt
 
 ## Features
 
-As far as double buffering is used pressing **J** leads to appearing correct piece of image "under" the disappeared frame.
+As far as double buffering is used pressing *J* leads to appearing correct piece of image "under" the disappeared frame.
+
+## Bugs
+
+If you write some instructions in the command-line (looks like scrolling) and then press *J*, the image will be unexpected (this can be classified as undefined behavour). I work on this problem.
 
 ## Example of the frame
 
