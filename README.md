@@ -2,7 +2,7 @@
 
 ## General information
 
-This program is written in assembler language for MS-DOS (assembler: TASM). It's a residential program that hooks interrupts **int 08h** (real-time timer) and **int 09h** (keyboard) and prints a frame with values of 8 registers: **AX**, **BX**, **CX**, **DX**, **SI**, **DI**, **BP**, **SP**.
+This program is written in assembler language for MS-DOS (assembler: TASM). It's a residential program that hooks interrupts **int 08h** (real-time clock) and **int 09h** (keyboard) and prints a frame with values of 8 registers: **AX**, **BX**, **CX**, **DX**, **SI**, **DI**, **BP**, **SP**.
 
 ## Usage
 
