@@ -17,9 +17,9 @@ locals @@
 ;       AX - number
 ;       BX - offset of the string
 ;       CX - is used to put values from one part of RAM to another
-;       DX - constains the remainder of division after using mul ()
+;       DX - contains the remainder of division after using mul ()
 ;       DI - contains radix, than offset of the string
-;       SI - constains the remainder of division number by radix
+;       SI - contains the remainder of division number by radix
 ;--------------------------------------------------------------------
 itoa        proc
 
@@ -32,10 +32,10 @@ str         equ [bp + 4]
             mov ax, num             ;
             mov bx, str             ; void itoa (int x, char *str, 16)
             mov di, 0010h           ;
-
+        if 0
             cmp ax, 0000h           ; if (x == 0)
             je @@zero               ;
-
+        endif
             cmp ax, 0000h           ; if (x < 0)
             jb @@negative           ;
 
@@ -70,7 +70,6 @@ str         equ [bp + 4]
             
             mov ch, EOL             ; *ptr = '\0'
             mov ds:[bx], ch         ;
-
 
             mov di, str               
 @@change:                           ; do
@@ -135,6 +134,8 @@ strlen      endp
 
 ;--------------------------------------------------------------------
 ;New_Line:
+;   Input:  none
+;   Output: none
 ;   Registers that change values:
 ;       DI - offset in the video segment
 ;--------------------------------------------------------------------
@@ -147,7 +148,7 @@ New_Line	proc
             xor dx, dx          ;
             mov ax, di          ;
             mov cx, 0A0h        ;
-            div cx              ; di = (di/160)*(160 + 1)
+            div cx              ; di = (di/160 + 1) * 160
             inc ax              ;
             mul cx              ;
             mov di, ax          ;
@@ -163,6 +164,8 @@ New_Line	endp
 
 ;--------------------------------------------------------------------
 ;Draw_TB_Lines:
+;   Input:  none
+;   Output: none
 ;   Registers that change values:
 ;       AL - character (inside <lodsb>)
 ;       AX - character and its descriptor (inside <stosw>)
@@ -193,6 +196,8 @@ Draw_TB_Lines   endp
 
 ;--------------------------------------------------------------------
 ;Draw_Registers:
+;   Input:  none
+;   Output: none
 ;   Registers that change values:
 ;       AL - charachers
 ;       AH - background colour
@@ -205,6 +210,8 @@ Draw_TB_Lines   endp
 ;       SI - offset of the string
 ;--------------------------------------------------------------------
 Draw_Registers      proc
+
+REGS_START_POS      equ 170
 
                     mov reg_vals[0], ax             ;
                     mov reg_vals[2], bx             ;
@@ -219,7 +226,7 @@ Draw_Registers      proc
                     mov es, ax                      ; set video mode
                     mov ah, COLOUR                  ;
                     
-                    mov di, 170                     ; top left corner of regs area
+                    mov di, REGS_START_POS          ; top left corner of regs area
                     mov bx, offset reg_vals
                     mov cx, 8                       ; counter for 8 regs
     @@print_regs:
@@ -275,7 +282,7 @@ Draw_Registers      proc
 
                     ret
 
-reg_vals    dw 8 dup (0)
+reg_vals    dw 8  dup (0)
 num_string  db 17 dup (0)                 
 
 Draw_Registers      endp
@@ -283,6 +290,8 @@ Draw_Registers      endp
 
 ;--------------------------------------------------------------------
 ;Draw_Frame:
+;   Input:  none
+;   Output: none
 ;   Registers that change values:
 ;       AL - charachers
 ;       AH - background colour
@@ -506,7 +515,7 @@ main    proc
     
         cli                                     ; extern interrupts are no longer allowed
         
-        ; CHANGING INT 08H
+        ; HOOKING INT 08H
 
             mov ax, 3508h                       ; finds out segment and offset
             int 21h                             ; of the old 08h handler
@@ -518,7 +527,7 @@ main    proc
             mov dx, offset New_int08h           ; changing 08h handler into my own
             int 21h                             ;
 
-        ; CHANGING INT 09H
+        ; HOOKING INT 09H
         
             mov ax, 3509h                       ; finds out segment and offset
             int 21h                             ; of the old 09h handler
@@ -558,8 +567,12 @@ New_int08h  proc
 
             call Buff_Check
             call Draw_Registers
+            cmp cs:[Not_Redraw_Flag], 01h
+            je @@already_drawn
             call Draw_Frame
+            mov cd:[Not_Redraw_Flag], 01h
 
+@@already_drawn:
             push offset Old_Buff
             call Save_Buff
             pop ax
@@ -626,6 +639,7 @@ Close       equ 24h                         ; 'J'
             je @@correct_exit               ; and there is no frame
 
             mov cs:[Frame_Flag], 02h
+            mov cd:[Not_Redraw_Flag], 00h
             jmp @@correct_exit
 
 @@exit:
@@ -635,7 +649,8 @@ Close       equ 24h                         ; 'J'
             db 0EAh                         ; <jmp far ptr> to old handler
             Old_int09h dd 0                 ;
 
-Frame_Flag  db 0
+Frame_Flag      db 0
+Not_Redraw_Flag db 0
 
 New_int09h  endp
 ;--------------------------------------------------------------------
