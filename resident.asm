@@ -71,6 +71,7 @@ str         equ [bp + 4]
             mov ch, EOL             ; *ptr = '\0'
             mov ds:[bx], ch         ;
 
+
             mov di, str               
 @@change:                           ; do
             dec bx                  ; --ptr
@@ -231,20 +232,20 @@ Draw_Registers      proc
 
                     push ax                         ;
                     push offset num_string          ;
-                    call itoa                       ; transform number in a string
+                    call itoa                       ; transforms number in a string
                     pop cx                          ;
                     pop cx                          ;
 
                     mov si, ax
 
                     push si                         ;
-                    call strlen                     ; measure length of the string
+                    call strlen                     ; measures length of the string
                     pop cx                          ;
 
                 pop bx
                 pop di
 
-                    cmp ax, 4                       ; if there are 4 digits
+                    cmp ax, 4                       ; if there are 4 digits,
                     je @@digits                     ; draw just them
                     
                     mov cx, 0004h                   ; else
