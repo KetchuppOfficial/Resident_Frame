@@ -71,7 +71,6 @@ str         equ [bp + 4]
             mov ch, EOL             ; *ptr = '\0'
             mov ds:[bx], ch         ;
 
-
             mov di, str               
 @@change:                           ; do
             dec bx                  ; --ptr
