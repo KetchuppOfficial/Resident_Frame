@@ -567,12 +567,8 @@ New_int08h  proc
 
             call Buff_Check
             call Draw_Registers
-            cmp cs:[Not_Redraw_Flag], 01h
-            je @@already_drawn
             call Draw_Frame
-            mov cd:[Not_Redraw_Flag], 01h
 
-@@already_drawn:
             push offset Old_Buff
             call Save_Buff
             pop ax
@@ -639,7 +635,6 @@ Close       equ 24h                         ; 'J'
             je @@correct_exit               ; and there is no frame
 
             mov cs:[Frame_Flag], 02h
-            mov cd:[Not_Redraw_Flag], 00h
             jmp @@correct_exit
 
 @@exit:
@@ -650,7 +645,6 @@ Close       equ 24h                         ; 'J'
             Old_int09h dd 0                 ;
 
 Frame_Flag      db 0
-Not_Redraw_Flag db 0
 
 New_int09h  endp
 ;--------------------------------------------------------------------
